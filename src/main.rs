@@ -24,7 +24,7 @@ fn main() {
                 println!("It's a draw!");
                 break;
             }
-            game.play_minimax(6);
+            game.play_minimax(10);
             game.print_board();
             if let Some(player) = game.is_someone_winning() {
                 println!("Player {:?} wins!", player);
@@ -38,6 +38,10 @@ fn main() {
             println!("Invalid play");
         }
     }
+
+    println!("Game over");
+    println!("Press enter to exit");
+    std::io::stdin().read_line(&mut String::new()).unwrap();
 }
 
 fn get_user_play() -> Result<u32, Box<dyn Error>> {

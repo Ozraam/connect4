@@ -255,6 +255,21 @@ impl Connect4 {
         }
     }
 
+
+    fn get_hash(&self) -> u64 {
+        let mut hash: u64 = 0;
+        for i in 0..self.size.height {
+            for j in 0..self.size.width {
+                hash = hash.wrapping_mul(3);
+                hash = hash.wrapping_add(match self.board[i as usize][j as usize] {
+                    CellState::Red => 1,
+                    CellState::Yellow => 2,
+                    CellState::Empty => 0,
+                });
+            }
+        }
+        hash
+    }
 }
 
 impl Display for Connect4 {

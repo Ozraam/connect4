@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::Connect4;
 
 /// Evaluate the board and return a score
@@ -99,10 +101,12 @@ pub fn find_best_move(board: &mut Connect4, depth: i32) -> u32 {
     let mut best_move = 8;
     let mut best_value = -1000;
 
+    let mut position_history: HashMap<u64, i32> = HashMap::new();
+
     for i in 0..board.get_size().width {
         if board.play(i) {
-            let move_value = -alpha_beta_pruning(board, depth - 1, -1000, 1000);
-            println!("Move: {} Value: {}", i, move_value);
+            let move_value = -alpha_beta_pruning(board, depth - 1, -1000, 1000, &mut position_history);
+            // println!("Move: {} Value: {}", i, move_value);
             board.undo().unwrap();
             if move_value > best_value {
                 best_move = i;
@@ -114,8 +118,10 @@ pub fn find_best_move(board: &mut Connect4, depth: i32) -> u32 {
     best_move
 }
 
-fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, beta: i32) -> i32 {
+fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, beta: i32, position_history: &mut HashMap<u64, i32>) -> i32 {
     let score = evaluate_board(board);
+
+    position_history.insert(board.get_hash(), score);
 
     if depth == 0 || score == 100 || score == -100 {
         return score;
@@ -123,7 +129,12 @@ fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, beta: i3
     
     for i in 0..board.get_size().width {
         if board.play(i) {
-            let value = -alpha_beta_pruning(board, depth - 1, -beta, -alpha);
+            let value = if position_history.contains_key(&board.get_hash()) {
+                *position_history.get(&board.get_hash()).unwrap()
+            } else {
+                -alpha_beta_pruning(board, depth - 1, -beta, -alpha, position_history)
+            };
+            
             board.undo().unwrap();
             if value >= beta {
                 return beta;
