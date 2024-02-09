@@ -1,7 +1,8 @@
-use std::fmt::{Display, Formatter, Result};
+use std::fmt::{self, Display, Formatter};
 use player::Player;
 
 mod player;
+mod evaluator;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CellState {
@@ -22,9 +23,8 @@ pub struct Connect4 {
     board: Board,
     size: Size,
     turn: Player,
+    moves: Vec<u32>,
 }
-
-
 
 impl Connect4 {
     pub fn new() -> Connect4 {
@@ -33,7 +33,7 @@ impl Connect4 {
             width: 7,
             height: 6,
         };
-        Connect4 { board, size, turn: Player::Red}
+        Connect4 { board, size, turn: Player::Red, moves: Vec::new()}
     }
 
     pub fn get_size(&self) -> &Size {
@@ -44,8 +44,12 @@ impl Connect4 {
         self.board
     }
 
-    pub fn play(&mut self, col: i32) -> bool {
-        if col < 0 || col >= self.size.width as i32 {
+    pub fn get_turn(&self) -> &Player {
+        &self.turn
+    }
+
+    pub fn play(&mut self, col: u32) -> bool {
+        if col >= self.size.width {
             return false;
         }
 
@@ -61,13 +65,36 @@ impl Connect4 {
                     Player::Red => Player::Yellow,
                     Player::Yellow => Player::Red,
                 };
-
+                self.moves.push(col);
                 return true;
             }
             i += 1;
         }
         false
     }
+
+    pub fn undo(&mut self) -> Result<(), String> {
+        if self.moves.is_empty() {
+            return Err("Move list empty".into());
+        }
+
+        let col = self.moves.pop().unwrap();
+        let mut i = (self.size.height - 1) as i32;
+
+        while i >= 0 {
+            if self.board[i as usize][col as usize] != CellState::Empty {
+                self.board[i as usize][col as usize] = CellState::Empty;
+                self.turn = match self.turn {
+                    Player::Red => Player::Yellow,
+                    Player::Yellow => Player::Red,
+                };
+                return Ok(());
+            }
+            i -= 1;
+        }
+        Err("Column empty".into())
+    }
+
 
     /// Returns the winner if there is one
     pub fn is_someone_winning(&self) -> Option<Player> {
@@ -89,25 +116,49 @@ impl Connect4 {
 
     fn check_win(&self, row: u32, col: u32) -> bool {
         let mut count = 0;
-        let mut i = row;
-        let mut j = col;
+        let mut i = row as i32;
+        let mut j = col as i32;
 
-        // Check horizontal
-        while j < self.size.width && self.board[i as usize][j as usize] == self.board[row as usize][col as usize] {
-            count += 1;
-            j += 1;
+        // Check vertical
+        while i >= 0 {
+            if self.board[i as usize][col as usize] == self.board[row as usize][col as usize] {
+                count += 1;
+            } else {
+                break;
+            }
+            i -= 1;
+        }
+        i = row as i32 + 1;
+        while i < self.size.height as i32 {
+            if self.board[i as usize][col as usize] == self.board[row as usize][col as usize] {
+                count += 1;
+            } else {
+                break;
+            }
+            i += 1;
         }
         if count >= 4 {
             return true;
         }
 
-        // Check vertical
+        // Check horizontal
         count = 0;
-        i = row;
-        j = col;
-        while i < self.size.height && self.board[i as usize][j as usize] == self.board[row as usize][col as usize] {
-            count += 1;
-            i += 1;
+        while j >= 0 {
+            if self.board[row as usize][j as usize] == self.board[row as usize][col as usize] {
+                count += 1;
+            } else {
+                break;
+            }
+            j -= 1;
+        }
+        j = col as i32 + 1;
+        while j < self.size.width as i32 {
+            if self.board[row as usize][j as usize] == self.board[row as usize][col as usize] {
+                count += 1;
+            } else {
+                break;
+            }
+            j += 1;
         }
         if count >= 4 {
             return true;
@@ -115,10 +166,25 @@ impl Connect4 {
 
         // Check diagonal
         count = 0;
-        i = row;
-        j = col;
-        while i < self.size.height && j < self.size.width && self.board[i as usize][j as usize] == self.board[row as usize][col as usize] {
-            count += 1;
+        i = row as i32;
+        j = col as i32;
+        while i >= 0 && j >= 0 {
+            if self.board[i as usize][j as usize] == self.board[row as usize][col as usize] {
+                count += 1;
+            } else {
+                break;
+            }
+            i -= 1;
+            j -= 1;
+        }
+        i = row as i32 + 1;
+        j = col as i32 + 1;
+        while i < self.size.height as i32 && j < self.size.width as i32 {
+            if self.board[i as usize][j as usize] == self.board[row as usize][col as usize] {
+                count += 1;
+            } else {
+                break;
+            }
             i += 1;
             j += 1;
         }
@@ -128,10 +194,25 @@ impl Connect4 {
 
         // Check anti-diagonal
         count = 0;
-        i = row;
-        j = col;
-        while i < self.size.height && j > 0 && self.board[i as usize][j as usize - 1] == self.board[row as usize][col as usize] {
-            count += 1;
+        i = row as i32;
+        j = col as i32;
+        while i >= 0 && j < self.size.width as i32 {
+            if self.board[i as usize][j as usize] == self.board[row as usize][col as usize] {
+                count += 1;
+            } else {
+                break;
+            }
+            i -= 1;
+            j += 1;
+        }
+        i = row as i32 + 1;
+        j = col as i32 - 1;
+        while i < self.size.height as i32 && j >= 0 {
+            if self.board[i as usize][j as usize] == self.board[row as usize][col as usize] {
+                count += 1;
+            } else {
+                break;
+            }
             i += 1;
             j -= 1;
         }
@@ -141,10 +222,43 @@ impl Connect4 {
 
         false
     }
+
+    pub fn print_board(&self) {
+        println!("{}", self);
+    }
+
+
+    pub fn is_draw(&self) -> bool {
+        for i in 0..self.size.width {
+            for j in 0..self.size.height {
+                if self.board[j as usize][i as usize] == CellState::Empty {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    pub fn play_minimax(&mut self, depth: i32) {
+        let bot_move = evaluator::find_best_move(self, depth);
+        self.play(bot_move);
+    }
+
+    pub fn get_cell(&self, i: u32, j: u32) -> Option<&Player>  {
+        if i >= self.size.height || j >= self.size.width {
+            return None;
+        }
+        match self.board[i as usize][j as usize] {
+            CellState::Red => Some(&Player::Red),
+            CellState::Yellow => Some(&Player::Yellow),
+            _ => None,
+        }
+    }
+
 }
 
 impl Display for Connect4 {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
 
         writeln!(f, "Connect 4")?;
         writeln!(f, "Player turn: {}", self.turn)?;
@@ -183,8 +297,7 @@ mod tests {
     #[test]
     fn test_play_wrong() {
         let mut game = Connect4::new();
-        assert_eq!(game.play(-1), false);
-        assert_eq!(game.play(7), false);
+        assert_eq!(game.play(8), false);
     }
 
     #[test]
@@ -238,5 +351,14 @@ mod tests {
         game.play(5);
         game.play(3);
         assert_eq!(game.is_someone_winning().unwrap(), Player::Red);
+    }
+
+    #[test]
+    fn test_undo() -> Result<(), String> {
+        let mut game = Connect4::new();
+        game.play(0);
+        game.undo()?;
+        assert_eq!(game.get_board(), [[CellState::Empty; 7]; 6]);
+        Ok(())
     }
 }
