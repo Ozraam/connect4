@@ -94,11 +94,26 @@ fn better_evaluate(board: &Connect4) -> i32 {
         }
     }
 
-    let threat = count_threat(board) as i32;
+    let (threat, threat_list) = count_threat(board);
     // threat worth 10 points
     score += threat * 10;
 
-    score
+    if is_threat_one_above_another(threat_list) {
+        score += 20;
+    }
+
+    score as i32
+}
+
+fn is_threat_one_above_another(threat_list: Vec<Threat>) -> bool {
+    for i in 0..threat_list.len() {
+        for j in i+1..threat_list.len() {
+            if threat_list[i].position.1 == threat_list[j].position.1 && threat_list[i].position.0 == threat_list[j].position.0 - 1 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 pub fn find_best_move(board: &mut Connect4, depth: i32) -> u32 {
@@ -151,13 +166,19 @@ fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, beta: i3
     alpha
 }
 
+
+struct Threat {
+    position: (u32, u32),
+}
+
 /// Count the number of threats on the board
 /// A threat is a sequence of 3 pieces of the same color with an empty cell at the end
-fn count_threat(board: &Connect4) -> u32 {
+fn count_threat(board: &Connect4) -> (u32, Vec<Threat>) {
     let mut count = 0;
     let mut threat = 0;
     let mut empty = 0;
     let mut last = crate::Player::Red;
+    let mut threat_list = Vec::new();
 
     // Horizontal threats
     for i in 0..board.get_size().height {
@@ -172,6 +193,7 @@ fn count_threat(board: &Connect4) -> u32 {
                     crate::Player::Yellow => crate::Player::Red,
                 };
                 if threat == 3 && empty == 1 {
+                    threat_list.push(Threat { position: (i, j) });
                     count += 1;
                 }
                 threat = 1;
@@ -180,6 +202,7 @@ fn count_threat(board: &Connect4) -> u32 {
         }
         if threat == 3 && empty == 1 {
             count += 1;
+            threat_list.push(Threat { position: (i, board.get_size().width) });
         }
         threat = 0;
         empty = 0;
@@ -199,6 +222,7 @@ fn count_threat(board: &Connect4) -> u32 {
                 };
                 if threat == 3 && empty == 1 {
                     count += 1;
+                    threat_list.push(Threat { position: (i, j) });
                 }
                 threat = 1;
                 empty = 0;
@@ -206,6 +230,7 @@ fn count_threat(board: &Connect4) -> u32 {
         }
         if threat == 3 && empty == 1 {
             count += 1;
+            threat_list.push(Threat { position: (board.get_size().height, j) });
         }
         threat = 0;
         empty = 0;
@@ -228,6 +253,7 @@ fn count_threat(board: &Connect4) -> u32 {
                         };
                         if threat == 3 && empty == 1 {
                             count += 1;
+                            threat_list.push(Threat { position: (i + k, j + k) });
                         }
                         threat = 1;
                         empty = 0;
@@ -235,6 +261,7 @@ fn count_threat(board: &Connect4) -> u32 {
                 }
                 if threat == 3 && empty == 1 {
                     count += 1;
+                    threat_list.push(Threat { position: (i + 3, j + 3) });
                 }
                 threat = 0;
                 empty = 0;
@@ -253,6 +280,7 @@ fn count_threat(board: &Connect4) -> u32 {
                         };
                         if threat == 3 && empty == 1 {
                             count += 1;
+                            threat_list.push(Threat { position: (i + k, j - k) });
                         }
                         threat = 1;
                         empty = 0;
@@ -260,6 +288,7 @@ fn count_threat(board: &Connect4) -> u32 {
                 }
                 if threat == 3 && empty == 1 {
                     count += 1;
+                    threat_list.push(Threat { position: (i + 3, j - 3) });
                 }
                 threat = 0;
                 empty = 0;
@@ -267,7 +296,7 @@ fn count_threat(board: &Connect4) -> u32 {
         }
     }
 
-    count
+    (count, threat_list)
 }
 
 

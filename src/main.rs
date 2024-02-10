@@ -24,7 +24,7 @@ fn main() {
                 println!("It's a draw!");
                 break;
             }
-            game.play_minimax(12);
+            game.play_minimax(8);
             game.print_board();
             if let Some(player) = game.is_someone_winning() {
                 println!("Player {:?} wins!", player);
