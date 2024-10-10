@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use rand::Rng;
 
 use crate::Connect4;
 
@@ -12,22 +13,20 @@ fn evaluate_board(board: &Connect4) -> i32 {
         crate::Player::Yellow => -1,
     };
 
-    for _i in 0..board.get_size().height {
-        for _j in 0..board.get_size().width {
-            
-            let winner = board.is_someone_winning();
-            if winner.is_some() {
-                return match winner.unwrap() {
-                    crate::Player::Red => 100 * turn_multi,
-                    crate::Player::Yellow => -100 * turn_multi,
-                };
-            } else {
-                return better_evaluate(board);
-            }
-        }
+    
+    let winner = board.is_someone_winning();
+    if winner.is_some() {
+        return match winner.unwrap() {
+            crate::Player::Red => 100 * turn_multi,
+            crate::Player::Yellow => -100 * turn_multi,
+        };
     }
+    else {
+        return better_evaluate(board);
+    }
+        
 
-    0
+    
 }
 
 fn better_evaluate(board: &Connect4) -> i32 {
@@ -39,6 +38,7 @@ fn better_evaluate(board: &Connect4) -> i32 {
         crate::Player::Yellow => crate::Player::Red,
     };
 
+    // Horizontal
     for i in 0..board.get_size().height {
         for j in 0..board.get_size().width {
             if board.get_cell(i, j) == Some(turn) {
@@ -52,6 +52,7 @@ fn better_evaluate(board: &Connect4) -> i32 {
         count = 0;
     }
 
+    // Vertical
     for j in 0..board.get_size().width {
         for i in 0..board.get_size().height {
             if board.get_cell(i, j) == Some(turn) {
@@ -65,6 +66,7 @@ fn better_evaluate(board: &Connect4) -> i32 {
         count = 0;
     }
 
+    // Diagonal
     for i in 0..board.get_size().height {
         for j in 0..board.get_size().width {
             if i + 3 < board.get_size().height && j + 3 < board.get_size().width {
@@ -131,6 +133,10 @@ pub fn find_best_move(board: &mut Connect4, depth: i32) -> u32 {
                 best_move = i;
             }
         }
+    }
+
+    if best_value <= -100 {
+        best_move = rand::thread_rng().gen_range(0..board.get_size().width);
     }
 
     best_move
