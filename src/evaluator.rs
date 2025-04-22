@@ -25,7 +25,7 @@ type TranspositionTable = HashMap<u64, TranspositionEntry>;
 /// If the player is winning, the score is positive +100
 /// If the opponent is winning, the score is negative -100
 /// If no one is winning, the score is 0
-fn evaluate_board(board: &Connect4) -> i32 {
+pub fn evaluate_board(board: &Connect4) -> i32 {
     let turn_multi = match board.get_turn() {
         crate::Player::Red => 1,
         crate::Player::Yellow => -1,
@@ -131,6 +131,12 @@ fn is_threat_one_above_another(threat_list: Vec<Threat>) -> bool {
         }
     }
     false
+}
+
+pub fn evaluate_position(board: &mut Connect4, max_depth: i32) -> i32 {
+    let mut position_history: TranspositionTable = HashMap::new();
+    let score = alpha_beta_pruning(board, max_depth, -10000, 10000, &mut position_history);
+    score
 }
 
 pub fn find_best_move(board: &mut Connect4, max_depth: i32) -> u32 {
