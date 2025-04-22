@@ -1,0 +1,57 @@
+# Get all games
+GET http://localhost:8080/games
+
+###
+# Get a game by ID
+GET http://localhost:8080/games/{id}
+
+###
+# Create a new game
+POST http://localhost:8080/games
+Content-Type: application/json
+
+{
+ 
+}
+
+# Response
+# {
+#   "id": UUID_String,
+#   "board:  String[6][7], // red, yellow, empty
+#   "turn": string, // "red" | "yellow"
+#   "winner": string | null, // "red" | "yellow" | null
+#   "is_draw": boolean,
+# }
+
+###
+# Make a move
+POST http://localhost:8080/games/{id}/move
+Content-Type: application/json
+
+{
+  "column": 0, // Column index (0-6)
+  "difficulty": 5 // [0, infinity] - AI depth lookahead, default 5, the higher the slower. 0 means no AI.
+}
+
+# Response
+# {
+#   "id": UUID_String,
+#   "board:  String[6][7], // red, yellow, empty
+#   "turn": string, // "red" | "yellow"
+#   "winner": string | null, // "red" | "yellow" | null
+#   "is_draw": boolean,
+# } |
+# {
+#   "error": string // Error message if the move is invalid or game is over or not found
+# }
+
+###
+# delete a game
+DELETE http://localhost:8080/games/{id}
+# Response
+# {
+#   "success": true,
+# } |
+# {
+#   "error": string // Error message if the game is not found
+# }

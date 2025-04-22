@@ -1,8 +1,24 @@
+use std::env;
 use std::error::Error;
 
 use connect4::Connect4;
 
-fn main() {
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    
+    if args.len() > 1 && args[1] == "server" {
+        println!("Starting Connect4 server...");
+        connect4::server::run_server().await?;
+        Ok(())
+    } else {
+        // Original console game
+        console_game();
+        Ok(())
+    }
+}
+
+fn console_game() {
     let mut game = Connect4::new();
     game.print_board();
 
@@ -24,7 +40,7 @@ fn main() {
                 println!("It's a draw!");
                 break;
             }
-            game.play_minimax(8);
+            game.play_minimax(10);
             game.print_board();
             if let Some(player) = game.is_someone_winning() {
                 println!("Player {:?} wins!", player);
