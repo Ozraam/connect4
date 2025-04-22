@@ -1,8 +1,10 @@
 use std::fmt::{self, Display, Formatter};
 use player::Player;
+use rand::Rng;
 
 mod player;
 mod evaluator;
+pub mod server;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CellState {
@@ -257,18 +259,42 @@ impl Connect4 {
 
 
     fn get_hash(&self) -> u64 {
-        let mut hash: u64 = 0;
-        for i in 0..self.size.height {
-            for j in 0..self.size.width {
-                hash = hash.wrapping_mul(3);
-                hash = hash.wrapping_add(match self.board[i as usize][j as usize] {
-                    CellState::Red => 1,
-                    CellState::Yellow => 2,
-                    CellState::Empty => 0,
-                });
+        // Use Zobrist hashing for better performance
+        static mut ZOBRIST_TABLE: Option<[[[u64; 3]; 7]; 6]> = None;
+        
+        unsafe {
+            // Initialize the Zobrist table if needed
+            if ZOBRIST_TABLE.is_none() {
+                let mut rng = rand::thread_rng();
+                let mut table = [[[0; 3]; 7]; 6];
+                // Fill the table with random values
+                for i in 0..6 {
+                    for j in 0..7 {
+                        for k in 0..3 {
+                            table[i][j][k] = rng.gen();
+                        }
+                    }
+                }
+                ZOBRIST_TABLE = Some(table);
             }
+            
+            let mut hash: u64 = 0;
+            // XOR the hash with the appropriate random number for each position
+            for i in 0..self.size.height {
+                for j in 0..self.size.width {
+                    let cell_value = match self.board[i as usize][j as usize] {
+                        CellState::Empty => 0,
+                        CellState::Red => 1,
+                        CellState::Yellow => 2,
+                    };
+                    if cell_value > 0 {
+                        hash ^= ZOBRIST_TABLE.as_ref().unwrap()[i as usize][j as usize][cell_value - 1];
+                    }
+                }
+            }
+            
+            hash
         }
-        hash
     }
 }
 

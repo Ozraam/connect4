@@ -3,6 +3,24 @@ use rand::Rng;
 
 use crate::Connect4;
 
+// Added enum to represent node types for transposition table
+#[derive(Clone, Copy, PartialEq)]
+enum NodeType {
+    Exact,
+    LowerBound,
+    UpperBound,
+}
+
+// Added struct to store more detailed information in the transposition table
+struct TranspositionEntry {
+    score: i32,
+    depth: i32,
+    node_type: NodeType,
+}
+
+// Replace simple HashMap with a more structured transposition table
+type TranspositionTable = HashMap<u64, TranspositionEntry>;
+
 /// Evaluate the board and return a score
 /// If the player is winning, the score is positive +100
 /// If the opponent is winning, the score is negative -100
@@ -24,9 +42,6 @@ fn evaluate_board(board: &Connect4) -> i32 {
     else {
         return better_evaluate(board);
     }
-        
-
-    
 }
 
 fn better_evaluate(board: &Connect4) -> i32 {
@@ -118,58 +133,142 @@ fn is_threat_one_above_another(threat_list: Vec<Threat>) -> bool {
     false
 }
 
-pub fn find_best_move(board: &mut Connect4, depth: i32) -> u32 {
-    let mut position_history: HashMap<u64, i32> = HashMap::new();
+pub fn find_best_move(board: &mut Connect4, max_depth: i32) -> u32 {
     let mut best_move = 0;
-    let mut best_value = -10000;
+    let mut position_history: TranspositionTable = HashMap::new();
+    
+    // Column ordering heuristic - prioritize center columns
+    let column_order = [3, 2, 4, 1, 5, 0, 6];
+    let mut death_moves = vec![];
+    
+    // Implement iterative deepening - start with low depth and progressively increase
+    for depth in 1..=max_depth {
+        let mut best_value = -10000;
+        let mut local_best_move = 0;
 
-    for i in 0..board.get_size().width {
-        if board.play(i) {
-            let value = -alpha_beta_pruning(board, depth - 1, -10000, 10000, &mut position_history);
-            board.undo().unwrap();
-            println!("Move {} has value {}", i, value);
-            if value > best_value {
-                best_value = value;
-                best_move = i;
+        for &i in &column_order {
+            if board.play(i) {
+                let value = -alpha_beta_pruning(board, depth - 1, -10000, 10000, &mut position_history);
+                board.undo().unwrap();
+                
+                if depth == max_depth {
+                    println!("Move {} has value {}", i, value);
+                }
+                
+                if value > best_value {
+                    best_value = value;
+                    local_best_move = i;
+                }
+
+                if value == -100 {
+                    // If we find a losing move, add it to the death_moves list
+                    death_moves.push(i);
+                }
             }
+        }
+        
+        best_move = local_best_move;
+        
+        // If we found a winning move, no need to search deeper
+        if best_value >= 90 {
+            println!("Found winning move at depth {}", depth);
+            break;
         }
     }
 
-    if best_value <= -100 {
-        best_move = rand::thread_rng().gen_range(0..board.get_size().width);
+    // Add a small amount of randomness to avoid predictable play
+    if rand::thread_rng().gen_bool(0.05) && best_move != 3 {
+        let random_column = column_order[rand::thread_rng().gen_range(0..3)];
+
+        // check if random column is not a kill move
+        if !death_moves.contains(&random_column) {
+            // check if random column is valid
+            if board.play(random_column) {
+                board.undo().unwrap();
+                best_move = random_column;
+            }
+        }
     }
 
     best_move
 }
 
-fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, beta: i32, position_history: &mut HashMap<u64, i32>) -> i32 {
-    let score = evaluate_board(board);
-
-    position_history.insert(board.get_hash(), score);
-
-    if depth == 0 || score == 100 || score == -100 {
-        return score;
+fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, mut beta: i32, position_history: &mut TranspositionTable) -> i32 {
+    // Add early return for draw condition
+    if board.is_draw() {
+        return 0;
     }
     
-    for i in 0..board.get_size().width {
-        if board.play(i) {
-            let value = if position_history.contains_key(&board.get_hash()) {
-                *position_history.get(&board.get_hash()).unwrap()
-            } else {
-                -alpha_beta_pruning(board, depth - 1, -beta, -alpha, position_history)
-            };
-            
-            board.undo().unwrap();
-            if value >= beta {
-                return beta;
+    // Check transposition table first for faster lookups
+    let board_hash = board.get_hash();
+    if let Some(entry) = position_history.get(&board_hash) {
+        if entry.depth >= depth {
+            match entry.node_type {
+                NodeType::Exact => return entry.score,
+                NodeType::LowerBound => alpha = alpha.max(entry.score),
+                NodeType::UpperBound => beta = beta.min(entry.score),
             }
-            if value > alpha {
-                alpha = value;
+            
+            if alpha >= beta {
+                return entry.score;
             }
         }
     }
 
-    alpha
+    let score = evaluate_board(board);
+    if depth == 0 || score.abs() == 100 {
+        // Store the result in the transposition table
+        position_history.insert(board_hash, TranspositionEntry { 
+            score, 
+            depth, 
+            node_type: NodeType::Exact 
+        });
+        return score;
+    }
+    
+    // Add column ordering heuristic - prioritize center columns
+    let column_order = [3, 2, 4, 1, 5, 0, 6]; // Center-first ordering
+    
+    let mut best_score = -1000;
+    let original_alpha = alpha;
+    
+    for &i in &column_order {
+        if board.play(i) {
+            let value = -alpha_beta_pruning(board, depth - 1, -beta, -alpha, position_history);
+            board.undo().unwrap();
+            
+            best_score = best_score.max(value);
+            
+            if best_score > alpha {
+                alpha = best_score;
+            }
+            
+            if alpha >= beta {
+                // Store a lower bound in the transposition table
+                position_history.insert(board_hash, TranspositionEntry { 
+                    score: best_score, 
+                    depth, 
+                    node_type: NodeType::LowerBound 
+                });
+                return best_score;
+            }
+        }
+    }
+
+    // Store the result in the transposition table
+    let node_type = if best_score <= original_alpha {
+        NodeType::UpperBound
+    } else {
+        NodeType::Exact
+    };
+    
+    position_history.insert(board_hash, TranspositionEntry { 
+        score: best_score, 
+        depth, 
+        node_type 
+    });
+    
+    best_score
 }
 
 
