@@ -1,3 +1,4 @@
+use crate::evaluator::evaluate_position;
 use crate::Connect4;
 use actix_cors::Cors;
 use actix_web::{
@@ -190,6 +191,22 @@ async fn delete_game(path: web::Path<String>) -> HttpResponse {
     }
 }
 
+// Get evaluation of the game state
+#[get("/games/{id}/evaluate")]
+async fn evaluate_game(path: web::Path<String>) -> HttpResponse {
+    let id = path.into_inner();
+    
+    let mut games = GAMES.lock().unwrap();
+    if let Some(game) = games.get_mut(&id) {
+        let evaluation = evaluate_position(&mut game.game, 10);
+        return HttpResponse::Ok().json(evaluation);
+    }
+    
+    HttpResponse::NotFound().json(ErrorResponse {
+        error: "Game not found".to_string(),
+    })
+}
+
 pub async fn run_server() -> std::io::Result<()> {
     println!("Starting Connect4 server on http://127.0.0.1:8080");
     
@@ -207,6 +224,7 @@ pub async fn run_server() -> std::io::Result<()> {
             .service(list_games)
             .service(make_move)
             .service(delete_game)
+            .service(evaluate_game)
     })
     .bind("127.0.0.1:8080") {
         Ok(server) => {
