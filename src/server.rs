@@ -25,6 +25,7 @@ struct GameResponse {
     turn: String,
     winner: Option<String>,
     is_draw: bool,
+    last_move: Option<u32>, // Last move made by the player
 }
 
 #[derive(Serialize)]
@@ -55,7 +56,7 @@ struct GameListResponse {
 }
 
 // Convert game state to a serializable response
-fn game_to_response(game: &Connect4, id: &str) -> GameResponse {
+fn game_to_response(game: &Connect4, id: &str, last_move: Option<u32>) -> GameResponse {
     let board = game.get_board();
     let mut board_response = Vec::new();
     
@@ -85,6 +86,7 @@ fn game_to_response(game: &Connect4, id: &str) -> GameResponse {
         },
         winner,
         is_draw: game.is_draw(),
+        last_move,
     }
 }
 
@@ -100,7 +102,7 @@ async fn create_game(_req: web::Json<NewGameRequest>) -> HttpResponse {
     games.insert(id.clone(), GameAndDifficulty { game, difficulty });
     
     let game_ref = &games.get(&id).unwrap().game;
-    HttpResponse::Created().json(game_to_response(game_ref, &id))
+    HttpResponse::Created().json(game_to_response(game_ref, &id, None))
 }
 
 // Get game state
@@ -110,7 +112,7 @@ async fn get_game(path: web::Path<String>) -> HttpResponse {
     
     let games = GAMES.lock().unwrap();
     if let Some(game) = games.get(&id) {
-        HttpResponse::Ok().json(game_to_response(&game.game, &id))
+        HttpResponse::Ok().json(game_to_response(&game.game, &id, None))
     } else {
         HttpResponse::NotFound().json(ErrorResponse {
             error: "Game not found".to_string(),
@@ -148,7 +150,7 @@ async fn make_move(path: web::Path<String>, req: web::Json<MoveRequest>) -> Http
         
         // Check if the game is over after player's move
         let is_game_over = game.game.is_someone_winning().is_some() || game.game.is_draw();
-        
+        let mut last_move = None;
         // If game is not over, let AI make a move
         if !is_game_over {
             // Use the provided difficulty or default to game's default
@@ -162,11 +164,11 @@ async fn make_move(path: web::Path<String>, req: web::Json<MoveRequest>) -> Http
 
 
             if difficulty != 0 {
-                game.game.play_minimax(difficulty);
+                last_move = Some(game.game.play_minimax(difficulty));
             }
         }
-        
-        return HttpResponse::Ok().json(game_to_response(&game.game, &id));
+
+        return HttpResponse::Ok().json(game_to_response(&game.game, &id, last_move));
     } 
     
     HttpResponse::NotFound().json(ErrorResponse {

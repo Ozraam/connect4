@@ -241,9 +241,10 @@ impl Connect4 {
         true
     }
 
-    pub fn play_minimax(&mut self, depth: i32) {
+    pub fn play_minimax(&mut self, depth: i32) -> u32 {
         let bot_move = evaluator::find_best_move(self, depth);
         self.play(bot_move);
+        bot_move
     }
 
     pub fn get_cell(&self, i: u32, j: u32) -> Option<&Player>  {
@@ -260,11 +261,8 @@ impl Connect4 {
 
     fn get_hash(&self) -> u64 {
         // Use Zobrist hashing for better performance
-        static mut ZOBRIST_TABLE: Option<[[[u64; 3]; 7]; 6]> = None;
-        
-        unsafe {
-            // Initialize the Zobrist table if needed
-            if ZOBRIST_TABLE.is_none() {
+        thread_local! {
+            static ZOBRIST_TABLE: [[[u64; 3]; 7]; 6] = {
                 let mut rng = rand::thread_rng();
                 let mut table = [[[0; 3]; 7]; 6];
                 // Fill the table with random values
@@ -275,10 +273,12 @@ impl Connect4 {
                         }
                     }
                 }
-                ZOBRIST_TABLE = Some(table);
-            }
-            
-            let mut hash: u64 = 0;
+                table
+            };
+        }
+
+        let mut hash: u64 = 0;
+        ZOBRIST_TABLE.with(|table| {
             // XOR the hash with the appropriate random number for each position
             for i in 0..self.size.height {
                 for j in 0..self.size.width {
@@ -288,13 +288,13 @@ impl Connect4 {
                         CellState::Yellow => 2,
                     };
                     if cell_value > 0 {
-                        hash ^= ZOBRIST_TABLE.as_ref().unwrap()[i as usize][j as usize][cell_value - 1];
+                        hash ^= table[i as usize][j as usize][cell_value - 1];
                     }
                 }
             }
-            
-            hash
-        }
+        });
+
+        hash
     }
 }
 
