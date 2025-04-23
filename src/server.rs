@@ -46,8 +46,12 @@ struct MoveRequest {
 
 #[derive(Deserialize)]
 struct NewGameRequest {
-    #[allow(dead_code)]
     ai_difficulty: Option<i32>,
+}
+
+#[derive(Deserialize)]
+struct EvaluateRequest {
+    depth: i32,
 }
 
 #[derive(Serialize)]
@@ -195,12 +199,13 @@ async fn delete_game(path: web::Path<String>) -> HttpResponse {
 
 // Get evaluation of the game state
 #[get("/games/{id}/evaluate")]
-async fn evaluate_game(path: web::Path<String>) -> HttpResponse {
+async fn evaluate_game(path: web::Path<String>, req: web::Query<EvaluateRequest>) -> HttpResponse {
     let id = path.into_inner();
     
     let mut games = GAMES.lock().unwrap();
     if let Some(game) = games.get_mut(&id) {
-        let evaluation = evaluate_position(&mut game.game, 10);
+        let depth = req.depth;
+        let evaluation = evaluate_position(&mut game.game, depth);
         return HttpResponse::Ok().json(evaluation);
     }
     
