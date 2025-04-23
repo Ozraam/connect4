@@ -11,7 +11,7 @@ POST http://localhost:8080/games
 Content-Type: application/json
 
 {
- 
+  
 }
 
 # Response
@@ -30,7 +30,7 @@ Content-Type: application/json
 
 {
   "column": 0, // Column index (0-6)
-  "difficulty": 5 // [0, infinity] - AI depth lookahead, default 5, the higher the slower. 0 means no AI.
+  "ai_difficulty": 5 // optional: [0, infinity] - AI depth lookahead, default 5, the higher the slower. 0 means no AI.
 }
 
 # Response

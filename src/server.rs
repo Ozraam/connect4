@@ -210,7 +210,7 @@ async fn evaluate_game(path: web::Path<String>) -> HttpResponse {
 }
 
 pub async fn run_server() -> std::io::Result<()> {
-    println!("Starting Connect4 server on http://127.0.0.1:8080");
+    println!("Starting Connect4 server on http://0.0.0.0:8080");
     
     match HttpServer::new(|| {
         // Configure CORS to allow web clients to connect
@@ -228,9 +228,9 @@ pub async fn run_server() -> std::io::Result<()> {
             .service(delete_game)
             .service(evaluate_game)
     })
-    .bind("127.0.0.1:8080") {
+    .bind("0.0.0.0:8080") {
         Ok(server) => {
-            println!("Server bound successfully to 127.0.0.1:8080");
+            println!("Server bound successfully to 0.0.0.0:8080");
             match server.run().await {
                 Ok(_) => Ok(()),
                 Err(e) => {
@@ -240,7 +240,7 @@ pub async fn run_server() -> std::io::Result<()> {
             }
         },
         Err(e) => {
-            eprintln!("Failed to bind to 127.0.0.1:8080: {}", e);
+            eprintln!("Failed to bind to 0.0.0.0:8080: {}", e);
             Err(e)
         }
     }
