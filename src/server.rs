@@ -220,7 +220,10 @@ pub async fn run_server() -> std::io::Result<()> {
     match HttpServer::new(|| {
         // Configure CORS to allow web clients to connect
         let cors = Cors::default()
-            .allow_any_origin()
+            .allowed_origin("https://localhost:3000")
+            .allowed_origin("http://localhost:3000")
+            .allowed_origin("https://connect4.ozraam.uk")
+            .allowed_origin("http://connect4.ozraam.uk")
             .allow_any_method()
             .allow_any_header();
             
