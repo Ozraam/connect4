@@ -1,5 +1,6 @@
-use std::collections::HashMap;
 use rand::Rng;
+use rustbenchmarktimer::timer::BenchmarkTimer;
+use std::collections::HashMap;
 
 use crate::Connect4;
 
@@ -31,15 +32,13 @@ pub fn evaluate_board(board: &Connect4) -> i32 {
         crate::Player::Yellow => -1,
     };
 
-    
     let winner = board.is_someone_winning();
     if winner.is_some() {
         return match winner.unwrap() {
             crate::Player::Red => 100 * turn_multi,
             crate::Player::Yellow => -100 * turn_multi,
         };
-    }
-    else {
+    } else {
         return better_evaluate(board);
     }
 }
@@ -124,8 +123,10 @@ fn better_evaluate(board: &Connect4) -> i32 {
 
 fn is_threat_one_above_another(threat_list: Vec<Threat>) -> bool {
     for i in 0..threat_list.len() {
-        for j in i+1..threat_list.len() {
-            if threat_list[i].position.1 == threat_list[j].position.1 && threat_list[i].position.0 == threat_list[j].position.0 - 1 {
+        for j in i + 1..threat_list.len() {
+            if threat_list[i].position.1 == threat_list[j].position.1
+                && threat_list[i].position.0 == threat_list[j].position.0 - 1
+            {
                 return true;
             }
         }
@@ -135,32 +136,45 @@ fn is_threat_one_above_another(threat_list: Vec<Threat>) -> bool {
 
 pub fn evaluate_position(board: &mut Connect4, max_depth: i32) -> i32 {
     let mut position_history: TranspositionTable = HashMap::new();
-    let score = alpha_beta_pruning(board, max_depth, -10000, 10000, &mut position_history);
+    let score = alpha_beta_pruning(board, max_depth, -10000, 10000, &mut position_history, &mut None);
     score
 }
 
-pub fn find_best_move(board: &mut Connect4, max_depth: i32) -> u32 {
+pub fn find_best_move(
+    board: &mut Connect4,
+    max_depth: i32,
+    bench: &mut Option<&mut BenchmarkTimer>,
+) -> u32 {
     let mut best_move = 0;
     let mut position_history: TranspositionTable = HashMap::new();
-    
+
     // Column ordering heuristic - prioritize center columns
     let column_order = [3, 2, 4, 1, 5, 0, 6];
     let mut death_moves = vec![];
-    
+
     // Implement iterative deepening - start with low depth and progressively increase
     for depth in 1..=max_depth {
         let mut best_value = -10000;
         let mut local_best_move = 0;
-
+        if let Some(bench_timer) = bench.as_mut() {
+            bench_timer.start("iterative_deepening");
+        }
         for &i in &column_order {
             if board.play(i) {
-                let value = -alpha_beta_pruning(board, depth - 1, -10000, 10000, &mut position_history);
+                if let Some(bench_timer) = bench.as_mut() {
+                    bench_timer.start("alpha_beta_pruning");
+                }
+                let value =
+                    -alpha_beta_pruning(board, depth - 1, -10000, 10000, &mut position_history, bench);
+                if let Some(bench_timer) = bench.as_mut() {
+                    bench_timer.stop("alpha_beta_pruning");
+                }
                 board.undo().unwrap();
-                
+
                 if depth == max_depth {
                     println!("Move {} has value {}", i, value);
                 }
-                
+
                 if value > best_value {
                     best_value = value;
                     local_best_move = i;
@@ -172,9 +186,12 @@ pub fn find_best_move(board: &mut Connect4, max_depth: i32) -> u32 {
                 }
             }
         }
-        
+        if let Some(bench_timer) = bench.as_mut() {
+            bench_timer.stop("iterative_deepening");
+        }
+
         best_move = local_best_move;
-        
+
         // If we found a winning move, no need to search deeper
         if best_value >= 90 {
             println!("Found winning move at depth {}", depth);
@@ -199,14 +216,27 @@ pub fn find_best_move(board: &mut Connect4, max_depth: i32) -> u32 {
     best_move
 }
 
-fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, mut beta: i32, position_history: &mut TranspositionTable) -> i32 {
+fn alpha_beta_pruning(
+    board: &mut Connect4,
+    depth: i32,
+    mut alpha: i32,
+    mut beta: i32,
+    position_history: &mut TranspositionTable,
+    bench: &mut Option<&mut BenchmarkTimer>,
+) -> i32 {
     // Add early return for draw condition
     if board.is_draw() {
         return 0;
     }
-    
+
     // Check transposition table first for faster lookups
+    if let Some(bench_timer) = bench.as_mut() {
+        bench_timer.start("transposition_table");
+    }
     let board_hash = board.get_hash();
+    if let Some(bench_timer) = bench.as_mut() {
+        bench_timer.stop("transposition_table");
+    }
     if let Some(entry) = position_history.get(&board_hash) {
         if entry.depth >= depth {
             match entry.node_type {
@@ -214,48 +244,61 @@ fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, mut beta
                 NodeType::LowerBound => alpha = alpha.max(entry.score),
                 NodeType::UpperBound => beta = beta.min(entry.score),
             }
-            
+
             if alpha >= beta {
                 return entry.score;
             }
         }
     }
+    
 
+    if let Some(bench_timer) = bench.as_mut() {
+        bench_timer.start("evaluate_board");
+    }
     let score = evaluate_board(board);
+    if let Some(bench_timer) = bench.as_mut() {
+        bench_timer.stop("evaluate_board");
+    }
     if depth == 0 || score.abs() == 100 {
         // Store the result in the transposition table
-        position_history.insert(board_hash, TranspositionEntry { 
-            score, 
-            depth, 
-            node_type: NodeType::Exact 
-        });
+        position_history.insert(
+            board_hash,
+            TranspositionEntry {
+                score,
+                depth,
+                node_type: NodeType::Exact,
+            },
+        );
         return score;
     }
-    
+
     // Add column ordering heuristic - prioritize center columns
     let column_order = [3, 2, 4, 1, 5, 0, 6]; // Center-first ordering
-    
+
     let mut best_score = -1000;
     let original_alpha = alpha;
-    
+
     for &i in &column_order {
         if board.play(i) {
-            let value = -alpha_beta_pruning(board, depth - 1, -beta, -alpha, position_history);
+            let value = -alpha_beta_pruning(board, depth - 1, -beta, -alpha, position_history, bench);
             board.undo().unwrap();
-            
+
             best_score = best_score.max(value);
-            
+
             if best_score > alpha {
                 alpha = best_score;
             }
-            
+
             if alpha >= beta {
                 // Store a lower bound in the transposition table
-                position_history.insert(board_hash, TranspositionEntry { 
-                    score: best_score, 
-                    depth, 
-                    node_type: NodeType::LowerBound 
-                });
+                position_history.insert(
+                    board_hash,
+                    TranspositionEntry {
+                        score: best_score,
+                        depth,
+                        node_type: NodeType::LowerBound,
+                    },
+                );
                 return best_score;
             }
         }
@@ -267,16 +310,18 @@ fn alpha_beta_pruning(board: &mut Connect4, depth: i32, mut alpha: i32, mut beta
     } else {
         NodeType::Exact
     };
-    
-    position_history.insert(board_hash, TranspositionEntry { 
-        score: best_score, 
-        depth, 
-        node_type 
-    });
-    
+
+    position_history.insert(
+        board_hash,
+        TranspositionEntry {
+            score: best_score,
+            depth,
+            node_type,
+        },
+    );
+
     best_score
 }
-
 
 struct Threat {
     position: (u32, u32),
@@ -313,7 +358,9 @@ fn count_threat(board: &Connect4) -> (u32, Vec<Threat>) {
         }
         if threat == 3 && empty == 1 {
             count += 1;
-            threat_list.push(Threat { position: (i, board.get_size().width) });
+            threat_list.push(Threat {
+                position: (i, board.get_size().width),
+            });
         }
         threat = 0;
         empty = 0;
@@ -341,7 +388,9 @@ fn count_threat(board: &Connect4) -> (u32, Vec<Threat>) {
         }
         if threat == 3 && empty == 1 {
             count += 1;
-            threat_list.push(Threat { position: (board.get_size().height, j) });
+            threat_list.push(Threat {
+                position: (board.get_size().height, j),
+            });
         }
         threat = 0;
         empty = 0;
@@ -357,14 +406,15 @@ fn count_threat(board: &Connect4) -> (u32, Vec<Threat>) {
                     } else if board.get_cell(i + k, j + k) == None {
                         empty += 1;
                     } else {
-                        last = match last
-                        {
+                        last = match last {
                             crate::Player::Red => crate::Player::Yellow,
                             crate::Player::Yellow => crate::Player::Red,
                         };
                         if threat == 3 && empty == 1 {
                             count += 1;
-                            threat_list.push(Threat { position: (i + k, j + k) });
+                            threat_list.push(Threat {
+                                position: (i + k, j + k),
+                            });
                         }
                         threat = 1;
                         empty = 0;
@@ -372,7 +422,9 @@ fn count_threat(board: &Connect4) -> (u32, Vec<Threat>) {
                 }
                 if threat == 3 && empty == 1 {
                     count += 1;
-                    threat_list.push(Threat { position: (i + 3, j + 3) });
+                    threat_list.push(Threat {
+                        position: (i + 3, j + 3),
+                    });
                 }
                 threat = 0;
                 empty = 0;
@@ -384,14 +436,15 @@ fn count_threat(board: &Connect4) -> (u32, Vec<Threat>) {
                     } else if board.get_cell(i + k, j - k) == None {
                         empty += 1;
                     } else {
-                        last = match last
-                        {
+                        last = match last {
                             crate::Player::Red => crate::Player::Yellow,
                             crate::Player::Yellow => crate::Player::Red,
                         };
                         if threat == 3 && empty == 1 {
                             count += 1;
-                            threat_list.push(Threat { position: (i + k, j - k) });
+                            threat_list.push(Threat {
+                                position: (i + k, j - k),
+                            });
                         }
                         threat = 1;
                         empty = 0;
@@ -399,7 +452,9 @@ fn count_threat(board: &Connect4) -> (u32, Vec<Threat>) {
                 }
                 if threat == 3 && empty == 1 {
                     count += 1;
-                    threat_list.push(Threat { position: (i + 3, j - 3) });
+                    threat_list.push(Threat {
+                        position: (i + 3, j - 3),
+                    });
                 }
                 threat = 0;
                 empty = 0;
@@ -409,7 +464,6 @@ fn count_threat(board: &Connect4) -> (u32, Vec<Threat>) {
 
     (count, threat_list)
 }
-
 
 #[cfg(test)]
 mod tests {

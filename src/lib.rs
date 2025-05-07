@@ -1,6 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 use player::Player;
 use rand::Rng;
+use rustbenchmarktimer::timer::BenchmarkTimer;
 
 mod player;
 mod evaluator;
@@ -242,8 +243,12 @@ impl Connect4 {
     }
 
     pub fn play_minimax(&mut self, depth: i32) -> u32 {
-        let bot_move = evaluator::find_best_move(self, depth);
+        let mut bench = BenchmarkTimer::new();
+        bench.start("botplay");
+        let bot_move = evaluator::find_best_move(self, depth, &mut Some(&mut bench));
         self.play(bot_move);
+        bench.stop("botplay");
+        bench.print();
         bot_move
     }
 
