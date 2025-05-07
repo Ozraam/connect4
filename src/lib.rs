@@ -18,33 +18,90 @@ pub enum CellState {
 pub struct Size {
     pub width: u32,
     pub height: u32,
+    pub length: u32,
 }
 
-pub type Board = [[CellState; 7]; 6];
+pub struct Board {
+    pub yellow: u64,
+    pub red: u64,
+    pub size: Size,
+}
+
+impl Board {
+    pub fn new() -> Board {
+        Board {
+            yellow: 0,
+            red: 0,
+            size: Size {
+                width: 7,
+                height: 6,
+                length: 42,
+            },
+        }
+    }
+
+    pub fn combined(&self) -> u64 {
+        self.yellow | self.red
+    }
+}
 
 pub struct Connect4 {
     board: Board,
     size: Size,
     turn: Player,
     moves: Vec<u32>,
+    winning_sequence: Vec<u64>,
 }
 
 impl Connect4 {
     pub fn new() -> Connect4 {
-        let board = [[CellState::Empty; 7]; 6];
+        let board = Board::new();
         let size = Size {
             width: 7,
             height: 6,
+            length: 42,
         };
-        Connect4 { board, size, turn: Player::Red, moves: Vec::new()}
+
+        // Initialize the winning sequence
+        let mut winning_sequence = Vec::new();
+        // Horizontal
+        let line1 = 0b1111;
+        for i in 0..(size.height as u64) {
+            for j in 0..(size.width as u64 - 3) {
+                winning_sequence.push(line1 << (i * size.width as u64 + j));
+            }
+        }
+        // Vertical
+        let col1 = 1 << 0 & 1 << size.width & 1 << size.width * 2 & 1 << size.width * 3;
+        for i in 0..(size.width as u64) {
+            for j in 0..(size.height as u64 - 3) {
+                winning_sequence.push(col1 << (i + j * size.width as u64));
+            }
+        }
+        // Diagonal \
+        let diag1 = 1 << 0 & 1 << size.width + 1 & 1 << size.width * 2 + 2 & 1 << size.width * 3 + 3;
+        for i in 0..(size.width as u64 - 3) {
+            for j in 0..(size.height as u64 - 3) {
+                winning_sequence.push(diag1 << (i + j * size.width as u64));
+            }
+        }
+        // Diagonal /
+        let diag2 = 1 << 0 & 1 << size.width - 1 & 1 << size.width * 2 - 2 & 1 << size.width * 3 - 3;
+        for i in 0..(size.width as u64 - 3) {
+            for j in 3..(size.height as u64) {
+                winning_sequence.push(diag2 << (i + j * size.width as u64));
+            }
+        }
+
+        Connect4 { board, size, turn: Player::Red, moves: Vec::new(), winning_sequence }
     }
 
     pub fn get_size(&self) -> &Size {
         &self.size
     }
 
-    pub fn get_board(&self) -> Board {
-        self.board
+    pub fn get_board(&self) -> &Board {
+        &self.board
     }
 
     pub fn get_turn(&self) -> &Player {
@@ -56,24 +113,32 @@ impl Connect4 {
             return false;
         }
 
-        let mut i = 0;
-        while i < self.size.height {
-            if self.board[i as usize][col as usize] == CellState::Empty {
-                self.board[i as usize][col as usize] = match self.turn {
-                    Player::Red => CellState::Red,
-                    Player::Yellow => CellState::Yellow,
-                };
+        let mut pos = 1 << col;
 
-                self.turn = match self.turn {
-                    Player::Red => Player::Yellow,
-                    Player::Yellow => Player::Red,
-                };
-                self.moves.push(col);
-                return true;
+        let com = self.board.combined();
+
+        while com & pos != 0 {
+            if pos == 1 << (self.size.length - 1) {
+                return false;
             }
-            i += 1;
+            pos <<= self.size.width;
         }
-        false
+
+        if self.turn == Player::Red {
+            self.board.red |= pos;
+        } else {
+            self.board.yellow |= pos;
+        }
+
+        self.moves.push(col);
+
+        self.turn = if self.turn == Player::Red {
+            Player::Yellow
+        } else {
+            Player::Red
+        };
+
+        true
     }
 
     pub fn undo(&mut self) -> Result<(), String> {
@@ -82,38 +147,35 @@ impl Connect4 {
         }
 
         let col = self.moves.pop().unwrap();
-        let mut i = (self.size.height - 1) as i32;
+        let mut pos = 1 << col;
+        let com = self.board.combined();
 
-        while i >= 0 {
-            if self.board[i as usize][col as usize] != CellState::Empty {
-                self.board[i as usize][col as usize] = CellState::Empty;
-                self.turn = match self.turn {
-                    Player::Red => Player::Yellow,
-                    Player::Yellow => Player::Red,
-                };
-                return Ok(());
+        while com & pos != 0 {
+            if pos == 1 << (self.size.length - 1) {
+                return Err("Invalid move".into());
             }
-            i -= 1;
+            pos <<= self.size.width;
         }
-        Err("Column empty".into())
+
+        if self.turn == Player::Red {
+            self.board.red &= !pos;
+        } else {
+            self.board.yellow &= !pos;
+        }
+
+        self.turn = if self.turn == Player::Red {
+            Player::Yellow
+        } else {
+            Player::Red
+        };
+
+        Ok(())
     }
 
 
     /// Returns the winner if there is one
     pub fn is_someone_winning(&self) -> Option<Player> {
-        for i in 0..self.size.height {
-            for j in 0..self.size.width {
-                if self.board[i as usize][j as usize] != CellState::Empty {
-                    if self.check_win(i, j) {
-                        return Some(match self.board[i as usize][j as usize] {
-                            CellState::Red => Player::Red,
-                            CellState::Yellow => Player::Yellow,
-                            _ => unreachable!(),
-                        });
-                    }
-                }
-            }
-        }
+        
         None
     }
 
