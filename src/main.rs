@@ -9,7 +9,7 @@ async fn main() -> std::io::Result<()> {
     
     if args.len() > 1 && args[1] == "server" {
         println!("Starting Connect4 server...");
-        connect4::server::run_server().await?;
+        // connect4::server::run_server().await?; TODO: Uncomment this line to run the server
         Ok(())
     } else {
         // Original console game

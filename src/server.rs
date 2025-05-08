@@ -64,14 +64,14 @@ fn game_to_response(game: &Connect4, id: &str, last_move: Option<u32>) -> GameRe
     let board = game.get_board();
     let mut board_response = Vec::new();
     
-    for row in board.iter() {
+    for row in board.s() {
         let mut row_response = Vec::new();
         for cell in row.iter() {
-            row_response.push(match cell {
-                crate::CellState::Empty => "empty".to_string(),
-                crate::CellState::Red => "red".to_string(),
-                crate::CellState::Yellow => "yellow".to_string(),
-            });
+            match cell {
+                crate::player::Player::Red => row_response.push("red".to_string()),
+                crate::player::Player::Yellow => row_response.push("yellow".to_string()),
+                crate::player::Player::Empty => row_response.push("empty".to_string()),
+            }
         }
         board_response.push(row_response);
     }
